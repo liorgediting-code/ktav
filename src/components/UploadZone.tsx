@@ -31,6 +31,7 @@ export default function UploadZone({ onFilesUploaded, compact = false }: Props) 
     setUploadingCount(pdfs.length)
 
     const results: UploadedFile[] = []
+    const errors: string[] = []
     for (let i = 0; i < pdfs.length; i++) {
       const file = pdfs[i]
       setCurrentFile(file.name.replace(/\.pdf$/i, '').replace(/^100-GWE-/, '').replace(/-00$/, ''))
@@ -39,10 +40,11 @@ export default function UploadZone({ onFilesUploaded, compact = false }: Props) 
       try {
         const res = await fetch('/api/upload', { method: 'POST', body: form })
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error)
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
         results.push({ id: data.id, fileName: file.name, imageUrl: data.imageUrl })
-      } catch {
-        // skip failed files silently
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'שגיאה לא ידועה'
+        errors.push(`${file.name}: ${msg}`)
       }
       setProgress(Math.round(((i + 1) / pdfs.length) * 100))
     }
@@ -51,8 +53,8 @@ export default function UploadZone({ onFilesUploaded, compact = false }: Props) 
     setProgress(0)
     setCurrentFile('')
     if (results.length > 0) onFilesUploaded(results)
-    if (results.length < pdfs.length) {
-      setError(`${pdfs.length - results.length} קבצים נכשלו בהעלאה`)
+    if (errors.length > 0) {
+      setError(errors.join(' | '))
     }
   }, [onFilesUploaded])
 
@@ -246,12 +248,12 @@ export default function UploadZone({ onFilesUploaded, compact = false }: Props) 
       </label>
 
       {error && (
-        <div className="mt-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+          <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
           </svg>
-          {error}
+          <span className="break-all">{error}</span>
         </div>
       )}
     </div>
