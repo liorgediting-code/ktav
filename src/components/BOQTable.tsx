@@ -193,9 +193,14 @@ export default function BOQTable({ analysis, fileName, onUpdate }: Props) {
                 key={item.id}
                 className={`grid grid-cols-12 gap-0 px-5 py-3.5 text-sm border-b border-slate-50 last:border-0 hover:bg-slate-50/80 transition-colors duration-100 ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}
               >
-                {/* Code + optional page badge */}
+                {/* Code + optional badges */}
                 <div className="col-span-1 flex flex-col items-center justify-center gap-0.5">
                   <span className="font-mono text-xs text-slate-300">{item.itemCode}</span>
+                  {item.floorLevel != null && (
+                    <span className="text-[10px] font-semibold text-violet-600 bg-violet-50 border border-violet-200 px-1.5 py-0 rounded-full leading-4 font-mono">
+                      {item.floorLevel}
+                    </span>
+                  )}
                   {item.pageNumber != null && (
                     <span className="text-[10px] font-semibold text-sky-500 bg-sky-50 border border-sky-200 px-1.5 py-0 rounded-full leading-4">
                       עמ׳ {item.pageNumber}
@@ -271,6 +276,15 @@ export default function BOQTable({ analysis, fileName, onUpdate }: Props) {
           </span>
         ))}
         <span className="border-r border-slate-200 h-3 mx-1" />
+        {analysis.items.some(i => i.floorLevel != null) && (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold text-violet-600 bg-violet-50 border border-violet-200 px-1.5 rounded-full font-mono">+5.78</span>
+              קוטה גובה רצפה
+            </span>
+            <span className="border-r border-slate-200 h-3 mx-1" />
+          </>
+        )}
         {hasPages && (
           <>
             <span className="flex items-center gap-1.5">

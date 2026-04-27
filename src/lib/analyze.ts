@@ -19,6 +19,12 @@ Calculation rules:
 - Steel/rebar: kg (assume 100 kg/m³ concrete for initial estimate)
 - Round to 2 decimal places
 
+Floor level detection:
+- Look for the floor elevation marker: a circle split half-black/half-white with a vertical line (קוטה symbol), followed by a value like +5.78 or -0.50
+- Each BOQ item must include "floorLevel" with the elevation value (e.g. "+5.78") that applies to it
+- If multiple floor levels appear in the drawing, assign each item to its closest/relevant level
+- If no level marker is visible, omit the "floorLevel" field
+
 IMPORTANT: Return ONLY valid JSON. No markdown, no explanations, no apologies.
 
 JSON format:
@@ -35,6 +41,7 @@ JSON format:
       "description": "detailed item description in Hebrew",
       "unit": "מ\\"ק",
       "quantity": 12.5,
+      "floorLevel": "+5.78",
       "notes": "calculation: 5.0 × 3.0 × 0.25 = 3.75 m³ × 3 slabs",
       "confidence": "high"
     }

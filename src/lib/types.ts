@@ -10,6 +10,7 @@ export interface BOQItem {
   total?: number
   notes?: string
   confidence: 'high' | 'medium' | 'low'
+  floorLevel?: string
   pageNumber?: number
 }
 
