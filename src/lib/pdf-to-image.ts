@@ -1,20 +1,24 @@
 /**
  * PDF → JPEG conversion — pure Node.js, no Python required.
- * Uses dynamic imports so pdfjs-dist loads at runtime (not build time),
- * avoiding DOMMatrix and other browser-global issues during Next.js build.
+ * Uses pdfjs-dist v4 with the worker imported inline (no separate thread),
+ * plus @napi-rs/canvas for rendering. Dynamic imports defer loading to
+ * call time so Next.js build doesn't hit browser-only globals.
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export async function pdfToJpeg(pdfBuffer: Buffer, zoom = 1.5): Promise<Buffer> {
-  // Lazy-load both packages at call time, not build time
+  // Importing pdf.worker.mjs registers the WorkerMessageHandler so pdfjs
+  // runs in-process (no separate Worker thread needed on the server).
   const [pdfjsMod, { createCanvas }] = await Promise.all([
-    import('pdfjs-dist/legacy/build/pdf.mjs'),
+    import('pdfjs-dist/legacy/build/pdf.mjs') as Promise<any>,
     import('@napi-rs/canvas'),
+    import('pdfjs-dist/legacy/build/pdf.worker.mjs' as any) as Promise<any>,
   ])
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pdfjs = pdfjsMod as any
 
-  // Disable web worker — single-threaded on the server
+  // Empty string = use the already-registered inline worker (v4 behavior)
   pdfjs.GlobalWorkerOptions.workerSrc = ''
 
   const pdf = await pdfjs.getDocument({
