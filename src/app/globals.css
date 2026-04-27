@@ -1,26 +1,150 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #F8FAFC;
+  --foreground: #334155;
+  --primary: #64748B;
+  --cta: #F97316;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Arial', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes dash-move {
+  to { stroke-dashoffset: -20; }
+}
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float-up {
+  animation: float-up 0.4s ease-out forwards;
+}
+
+.animate-float-up-delay-1 { animation: float-up 0.4s 0.1s ease-out both; }
+.animate-float-up-delay-2 { animation: float-up 0.4s 0.2s ease-out both; }
+.animate-float-up-delay-3 { animation: float-up 0.4s 0.3s ease-out both; }
+.animate-float-up-delay-4 { animation: float-up 0.4s 0.4s ease-out both; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes progress-stripe {
+  from { background-position: 40px 0; }
+  to { background-position: 0 0; }
+}
+
+.progress-bar {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255,255,255,.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255,255,255,.15) 50%,
+    rgba(255,255,255,.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 40px 40px;
+  animation: progress-stripe 0.8s linear infinite;
+}
+
+/* Marching ants border for upload zone */
+@keyframes march-top    { from { transform: translateX(0);   } to { transform: translateX(-24px); } }
+@keyframes march-bottom { from { transform: translateX(0);   } to { transform: translateX(24px);  } }
+@keyframes march-left   { from { transform: translateY(0);   } to { transform: translateY(-24px); } }
+@keyframes march-right  { from { transform: translateY(0);   } to { transform: translateY(24px);  } }
+
+.upload-zone-border {
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  pointer-events: none;
+  overflow: hidden;
+}
+.upload-zone-border::before,
+.upload-zone-border::after {
+  content: '';
+  position: absolute;
+  background: repeating-linear-gradient(
+    90deg,
+    #f97316 0px, #f97316 8px,
+    transparent 8px, transparent 16px
+  );
+  height: 2px;
+  width: 200%;
+  left: -50%;
+}
+.upload-zone-border::before { top: 0; animation: march-top 0.6s linear infinite; }
+.upload-zone-border::after  { bottom: 0; animation: march-bottom 0.6s linear infinite; }
+
+.upload-zone-border-y::before,
+.upload-zone-border-y::after {
+  content: '';
+  position: absolute;
+  background: repeating-linear-gradient(
+    180deg,
+    #f97316 0px, #f97316 8px,
+    transparent 8px, transparent 16px
+  );
+  width: 2px;
+  height: 200%;
+  top: -50%;
+}
+.upload-zone-border-y::before { left: 0;  animation: march-left  0.6s linear infinite; }
+.upload-zone-border-y::after  { right: 0; animation: march-right 0.6s linear infinite; }
+
+/* Idle border - subtle dashes */
+.upload-zone-idle {
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  pointer-events: none;
+  border: 2px dashed #e2e8f0;
+  transition: border-color 0.2s;
+}
+
+/* Rotating gradient ring for AI spinner */
+@keyframes spin-ring {
+  to { transform: rotate(360deg); }
+}
+.ai-ring {
+  animation: spin-ring 1.2s linear infinite;
+}
+
+/* Fade + slide up stagger */
+@keyframes fade-up {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.5s ease-out forwards; }
+.fade-up-1 { animation: fade-up 0.5s 0.08s ease-out both; }
+.fade-up-2 { animation: fade-up 0.5s 0.16s ease-out both; }
+.fade-up-3 { animation: fade-up 0.5s 0.24s ease-out both; }
+.fade-up-4 { animation: fade-up 0.5s 0.32s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .progress-bar, .animate-float-up,
+  .animate-float-up-delay-1, .animate-float-up-delay-2,
+  .animate-float-up-delay-3, .animate-float-up-delay-4,
+  .upload-zone-border::before, .upload-zone-border::after,
+  .upload-zone-border-y::before, .upload-zone-border-y::after,
+  .ai-ring, .fade-up, .fade-up-1, .fade-up-2, .fade-up-3, .fade-up-4 {
+    animation: none;
+  }
 }
