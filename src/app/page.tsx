@@ -19,6 +19,7 @@ export default function Home() {
   const [files, setFiles] = useState<QueuedFile[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [analysisMsgIdx, setAnalysisMsgIdx] = useState(0)
+  const [userInstruction, setUserInstruction] = useState('')
 
   const hasFiles = files.length > 0
   const activeFile = files.find(f => f.id === activeId) ?? null
@@ -57,7 +58,7 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl }),
+        body: JSON.stringify({ imageUrl, userInstruction: userInstruction.trim() || undefined }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'שגיאת ניתוח')
@@ -72,7 +73,7 @@ export default function Home() {
           : f
       ))
     }
-  }, [files])
+  }, [files, userInstruction])
 
   // ── Analyze all ready files ──────────────────────────────────────────────
   const analyzeAll = useCallback(async () => {
@@ -182,6 +183,21 @@ export default function Home() {
               </p>
             </div>
 
+            {/* Instruction field */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-slate-600 mb-2 text-right">
+                מה אתה צריך לדעת? <span className="text-slate-400 font-normal">(אופציונלי)</span>
+              </label>
+              <textarea
+                value={userInstruction}
+                onChange={e => setUserInstruction(e.target.value)}
+                placeholder="לדוגמה: אני צריך לדעת כמה בטון, כמה ברזל, כמה מ&quot;ר טיח..."
+                rows={2}
+                className="w-full text-sm text-slate-800 placeholder:text-slate-300 bg-white border border-slate-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-300 transition-all shadow-sm"
+                dir="rtl"
+              />
+            </div>
+
             {/* Upload zone */}
             <UploadZone onFilesUploaded={handleFilesUploaded} />
 
@@ -240,6 +256,21 @@ export default function Home() {
                 onSelect={setActiveId}
                 onRemove={removeFile}
               />
+              {/* Instruction field */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                <label className="block text-xs font-semibold text-slate-600 mb-2">
+                  מה אתה צריך לדעת?
+                </label>
+                <textarea
+                  value={userInstruction}
+                  onChange={e => setUserInstruction(e.target.value)}
+                  placeholder="לדוגמה: אני צריך לדעת כמה בטון וכמה ברזל"
+                  rows={3}
+                  className="w-full text-sm text-slate-800 placeholder:text-slate-300 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-300 transition-all"
+                  dir="rtl"
+                />
+              </div>
+
               {/* Add more files */}
               <UploadZone onFilesUploaded={handleFilesUploaded} compact />
             </div>

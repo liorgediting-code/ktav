@@ -57,12 +57,14 @@ function isRefusal(text: string): boolean {
 
 /**
  * Analyze a construction drawing image.
- * @param imageBuffer  Raw JPEG/PNG bytes
- * @param mimeType     'image/jpeg' or 'image/png'
+ * @param imageBuffer       Raw JPEG/PNG bytes
+ * @param mimeType          'image/jpeg' or 'image/png'
+ * @param userInstruction   Optional focus instruction from the user (e.g. "I need concrete and rebar quantities")
  */
 export async function analyzePDF(
   imageBuffer: Buffer,
-  mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg'
+  mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg',
+  userInstruction?: string
 ): Promise<DrawingAnalysis> {
   const fileSizeMB = imageBuffer.length / (1024 * 1024)
   console.log(`Image size: ${fileSizeMB.toFixed(1)}MB`)
@@ -88,7 +90,7 @@ export async function analyzePDF(
             },
             {
               type: 'text',
-              text: 'This is a professional Israeli construction drawing (תכנית עבודה). Analyze it and extract all quantities. Return JSON only.',
+              text: `This is a professional Israeli construction drawing (תכנית עבודה). Analyze it and extract all quantities. Return JSON only.${userInstruction ? `\n\nUser focus instruction: ${userInstruction}` : ''}`,
             },
           ],
         },

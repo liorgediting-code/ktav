@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageUrl } = await req.json()
+    const { imageUrl, userInstruction } = await req.json()
 
     if (!imageUrl) {
       return NextResponse.json({ error: 'חסר imageUrl' }, { status: 400 })
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       if (filePath.endsWith('.png')) mimeType = 'image/png'
     }
 
-    const analysis = await analyzePDF(imageBuffer, mimeType)
+    const analysis = await analyzePDF(imageBuffer, mimeType, userInstruction)
     return NextResponse.json({ analysis })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'שגיאה לא ידועה'
