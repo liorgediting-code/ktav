@@ -1,6 +1,4 @@
 import OpenAI from 'openai'
-import fs from 'fs'
-import path from 'path'
 import { DrawingAnalysis, BOQItem } from './types'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -44,7 +42,6 @@ JSON format:
   "rawNotes": "general notes about the drawing"
 }`
 
-// Detect if model refused to process
 function isRefusal(text: string): boolean {
   const refusalPhrases = [
     "I'm sorry, I can't",
@@ -58,28 +55,27 @@ function isRefusal(text: string): boolean {
   return refusalPhrases.some(p => text.toLowerCase().includes(p.toLowerCase()))
 }
 
-export async function analyzePDF(imagePath: string): Promise<DrawingAnalysis> {
-  const imageBuffer = fs.readFileSync(imagePath)
-
-  // Check file size — warn if > 10MB base64 (OpenAI limit is 20MB)
+/**
+ * Analyze a construction drawing image.
+ * @param imageBuffer  Raw JPEG/PNG bytes
+ * @param mimeType     'image/jpeg' or 'image/png'
+ */
+export async function analyzePDF(
+  imageBuffer: Buffer,
+  mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg'
+): Promise<DrawingAnalysis> {
   const fileSizeMB = imageBuffer.length / (1024 * 1024)
   console.log(`Image size: ${fileSizeMB.toFixed(1)}MB`)
 
   const base64Image = imageBuffer.toString('base64')
-  const ext = path.extname(imagePath).slice(1).toLowerCase()
-  const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png'
 
   let content: string
-
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
       max_tokens: 4096,
       messages: [
-        {
-          role: 'system',
-          content: SYSTEM_PROMPT,
-        },
+        { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
           content: [
@@ -98,28 +94,24 @@ export async function analyzePDF(imagePath: string): Promise<DrawingAnalysis> {
         },
       ],
     })
-
     content = response.choices[0].message.content || '{}'
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(`OpenAI API error: ${msg}`)
   }
 
-  // Detect refusal
   if (isRefusal(content)) {
     throw new Error(
       'GPT-4o לא הצליח לעבד את התמונה. ייתכן שהתכנית סרוקה, לא ברורה, או גדולה מדי. נסה תכנית אחרת.'
     )
   }
 
-  // Parse JSON — strip markdown code fences if present
   const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
   let parsed: Omit<DrawingAnalysis, 'items'> & { items: Omit<BOQItem, 'id'>[] }
   try {
     parsed = JSON.parse(cleaned)
   } catch {
-    // Try to extract JSON object from within the text
     const match = cleaned.match(/\{[\s\S]*\}/)
     if (match) {
       try {
@@ -132,7 +124,6 @@ export async function analyzePDF(imagePath: string): Promise<DrawingAnalysis> {
     }
   }
 
-  // Add UUIDs to items
   const items: BOQItem[] = (parsed.items || []).map((item) => ({
     ...item,
     id: uuidv4(),

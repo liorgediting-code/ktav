@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react'
 interface UploadedFile {
   id: string
   fileName: string
+  imageUrl: string
 }
 
 interface Props {
@@ -39,7 +40,7 @@ export default function UploadZone({ onFilesUploaded, compact = false }: Props) 
         const res = await fetch('/api/upload', { method: 'POST', body: form })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
-        results.push({ id: data.id, fileName: file.name })
+        results.push({ id: data.id, fileName: file.name, imageUrl: data.imageUrl })
       } catch {
         // skip failed files silently
       }

@@ -32,11 +32,11 @@ export default function Home() {
   }, [isAnalyzing])
 
   // ── Add uploaded files to queue ──────────────────────────────────────────
-  const handleFilesUploaded = useCallback((uploaded: { id: string; fileName: string }[]) => {
+  const handleFilesUploaded = useCallback((uploaded: { id: string; fileName: string; imageUrl: string }[]) => {
     const newFiles: QueuedFile[] = uploaded.map(u => ({
       id: u.id,
       fileName: u.fileName,
-      imageUrl: `/api/file/${u.id}/image`,
+      imageUrl: u.imageUrl,
       status: 'ready' as const,
     }))
     setFiles(prev => {
@@ -48,6 +48,8 @@ export default function Home() {
 
   // ── Analyze a single file ────────────────────────────────────────────────
   const analyzeFile = useCallback(async (id: string) => {
+    // Snapshot imageUrl before setting status (avoids stale closure)
+    const imageUrl = files.find(f => f.id === id)?.imageUrl ?? ''
     setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'analyzing', error: undefined } : f))
     setActiveId(id)
 
@@ -55,7 +57,7 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ imageUrl }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'שגיאת ניתוח')
@@ -70,7 +72,7 @@ export default function Home() {
           : f
       ))
     }
-  }, [])
+  }, [files])
 
   // ── Analyze all ready files ──────────────────────────────────────────────
   const analyzeAll = useCallback(async () => {

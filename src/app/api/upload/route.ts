@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'fs/promises'
-import { execSync } from 'child_process'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
+import { pdfToJpeg } from '@/lib/pdf-to-image'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -16,45 +16,53 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'לא נשלח קובץ' }, { status: 400 })
     }
 
-    if (!file.name.endsWith('.pdf')) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
       return NextResponse.json({ error: 'יש להעלות קובץ PDF בלבד' }, { status: 400 })
     }
 
     const id = uuidv4()
-    const uploadsDir = path.join(process.cwd(), 'uploads', id)
-    await mkdir(uploadsDir, { recursive: true })
+    const pdfBuffer = Buffer.from(await file.arrayBuffer())
 
-    // שמירת ה-PDF
-    const pdfPath = path.join(uploadsDir, 'drawing.pdf')
-    const bytes = await file.arrayBuffer()
-    await writeFile(pdfPath, Buffer.from(bytes))
-
-    // המרה לתמונה באמצעות Python — JPEG במקום PNG, zoom 1.5 (קטן יותר, מהיר יותר)
-    const imagePath = path.join(uploadsDir, 'drawing.jpg')
-    const scriptPath = path.join(process.cwd(), 'src', 'lib', 'pdf-to-image.py')
-
+    // Convert PDF → JPEG (pure Node.js, no Python required)
+    let jpegBuffer: Buffer
     try {
-      const result = execSync(
-        `python3 "${scriptPath}" "${pdfPath}" "${imagePath}" 1.5`,
-        { timeout: 30000, encoding: 'utf8' }
-      ).trim()
-
-      if (!result.startsWith('OK:')) {
-        throw new Error(`Python script failed: ${result}`)
-      }
+      jpegBuffer = await pdfToJpeg(pdfBuffer, 1.5)
     } catch (err) {
       console.error('PDF conversion error:', err)
-      return NextResponse.json(
-        { error: 'שגיאה בהמרת ה-PDF לתמונה' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'שגיאה בהמרת ה-PDF לתמונה' }, { status: 500 })
     }
 
+    // ── Vercel Blob (production) ─────────────────────────────────────────────
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const { put } = await import('@vercel/blob')
+      const [imageBlob] = await Promise.all([
+        put(`${id}/drawing.jpg`, jpegBuffer, {
+          access: 'public',
+          contentType: 'image/jpeg',
+        }),
+        put(`${id}/drawing.pdf`, pdfBuffer, {
+          access: 'public',
+          contentType: 'application/pdf',
+        }),
+      ])
+      return NextResponse.json({
+        id,
+        fileName: file.name,
+        imageUrl: imageBlob.url,
+      })
+    }
+
+    // ── Local filesystem (development) ───────────────────────────────────────
+    const uploadsDir = path.join(process.cwd(), 'uploads', id)
+    await mkdir(uploadsDir, { recursive: true })
+    await Promise.all([
+      writeFile(path.join(uploadsDir, 'drawing.pdf'), pdfBuffer),
+      writeFile(path.join(uploadsDir, 'drawing.jpg'), jpegBuffer),
+    ])
     return NextResponse.json({
       id,
       fileName: file.name,
-      pdfPath: `/api/file/${id}/pdf`,
-      imagePath: `/api/file/${id}/image`,
+      imageUrl: `/api/file/${id}/image`,
     })
   } catch (err) {
     console.error('Upload error:', err)
