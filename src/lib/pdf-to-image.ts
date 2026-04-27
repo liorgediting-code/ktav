@@ -8,19 +8,17 @@
 
 export async function pdfToJpeg(pdfBuffer: Buffer, zoom = 1.5): Promise<Buffer> {
   // Dynamic imports: avoids DOMMatrix / browser-global errors during build
-  const [pdfjsMod, { createCanvas }, { createRequire }] = await Promise.all([
+  const [pdfjsMod, { createCanvas }, { join }] = await Promise.all([
     import('pdfjs-dist/legacy/build/pdf.mjs') as Promise<any>,
     import('@napi-rs/canvas'),
-    import('module'),
+    import('path'),
   ])
 
   const pdfjs = pdfjsMod as any
 
-  // Resolve the worker file path using Node's module resolution (works on Vercel
-  // because pdfjs-dist is in serverExternalPackages and stays in node_modules).
-  const req = createRequire(`file://${process.cwd()}/x.js`)
-  const workerPath: string = req.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')
-  // workerSrc must be a truthy file:// URL — empty string throws "not specified"
+  // On Vercel Lambda, process.cwd() is /var/task where node_modules lives.
+  // Using path.join is more reliable than createRequire on serverless environments.
+  const workerPath = join(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs')
   pdfjs.GlobalWorkerOptions.workerSrc = `file://${workerPath}`
 
   const pdf = await pdfjs.getDocument({
