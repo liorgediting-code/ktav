@@ -55,89 +55,116 @@ function isRefusal(text: string): boolean {
   return refusalPhrases.some(p => text.toLowerCase().includes(p.toLowerCase()))
 }
 
-/**
- * Analyze a construction drawing image.
- * @param imageBuffer       Raw JPEG/PNG bytes
- * @param mimeType          'image/jpeg' or 'image/png'
- * @param userInstruction   Optional focus instruction from the user (e.g. "I need concrete and rebar quantities")
- */
-export async function analyzePDF(
-  imageBuffer: Buffer,
-  mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg',
+interface PageInput {
+  buffer: Buffer
+  mimeType: 'image/jpeg' | 'image/png'
+  pageNum: number
+}
+
+async function analyzeOnePage(
+  page: PageInput,
+  totalPages: number,
   userInstruction?: string
-): Promise<DrawingAnalysis> {
-  const fileSizeMB = imageBuffer.length / (1024 * 1024)
-  console.log(`Image size: ${fileSizeMB.toFixed(1)}MB`)
+): Promise<{ analysis: Omit<DrawingAnalysis, 'items'> & { items: Omit<BOQItem, 'id'>[] }; pageNum: number }> {
+  const base64Image = page.buffer.toString('base64')
 
-  const base64Image = imageBuffer.toString('base64')
+  const pageLabel = totalPages > 1
+    ? `\n\nThis is page ${page.pageNum} of ${totalPages}.`
+    : ''
 
-  let content: string
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      max_tokens: 4096,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${mimeType};base64,${base64Image}`,
-                detail: 'high',
-              },
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    max_tokens: 4096,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${page.mimeType};base64,${base64Image}`,
+              detail: 'high',
             },
-            {
-              type: 'text',
-              text: `This is a professional Israeli construction drawing (תכנית עבודה). Analyze it and extract all quantities. Return JSON only.${userInstruction ? `\n\nUser focus instruction: ${userInstruction}` : ''}`,
-            },
-          ],
-        },
-      ],
-    })
-    content = response.choices[0].message.content || '{}'
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    throw new Error(`OpenAI API error: ${msg}`)
-  }
+          },
+          {
+            type: 'text',
+            text: `This is a professional Israeli construction drawing (תכנית עבודה).${pageLabel} Analyze it and extract all quantities. Return JSON only.${userInstruction ? `\n\nUser focus instruction: ${userInstruction}` : ''}`,
+          },
+        ],
+      },
+    ],
+  })
+
+  const content = response.choices[0].message.content || '{}'
 
   if (isRefusal(content)) {
     throw new Error(
-      'GPT-4o לא הצליח לעבד את התמונה. ייתכן שהתכנית סרוקה, לא ברורה, או גדולה מדי. נסה תכנית אחרת.'
+      `עמוד ${page.pageNum}: GPT-4o לא הצליח לעבד את התמונה.`
     )
   }
 
   const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
-  let parsed: Omit<DrawingAnalysis, 'items'> & { items: Omit<BOQItem, 'id'>[] }
   try {
-    parsed = JSON.parse(cleaned)
+    return { analysis: JSON.parse(cleaned), pageNum: page.pageNum }
   } catch {
     const match = cleaned.match(/\{[\s\S]*\}/)
     if (match) {
       try {
-        parsed = JSON.parse(match[0])
+        return { analysis: JSON.parse(match[0]), pageNum: page.pageNum }
       } catch {
-        throw new Error('התגובה מ-GPT-4o לא היתה JSON תקין. נסה שוב.')
+        throw new Error(`עמוד ${page.pageNum}: תגובה לא תקינה מ-GPT-4o.`)
       }
-    } else {
-      throw new Error('התגובה מ-GPT-4o לא היתה בפורמט הנכון. נסה שוב.')
     }
+    throw new Error(`עמוד ${page.pageNum}: תגובה לא בפורמט הנכון.`)
   }
+}
 
-  const items: BOQItem[] = (parsed.items || []).map((item) => ({
-    ...item,
-    id: uuidv4(),
-    confidence: item.confidence || 'medium',
-  }))
+/**
+ * Analyze one or more construction drawing pages in parallel.
+ * Each item is stamped with its source pageNumber server-side.
+ */
+export async function analyzePDF(
+  pages: PageInput[],
+  userInstruction?: string
+): Promise<DrawingAnalysis> {
+  const fileSizeMB = pages.reduce((s, p) => s + p.buffer.length, 0) / (1024 * 1024)
+  console.log(`Analyzing ${pages.length} page(s), total ${fileSizeMB.toFixed(1)}MB`)
+
+  const results = await Promise.all(
+    pages.map(p => analyzeOnePage(p, pages.length, userInstruction))
+  )
+
+  // Sort by page number in case Promise.all resolves out of order
+  results.sort((a, b) => a.pageNum - b.pageNum)
+
+  // Use page-1 metadata as the primary source
+  const primary = results[0].analysis
+
+  const allItems: BOQItem[] = results.flatMap(({ analysis, pageNum }) =>
+    (analysis.items || []).map(item => ({
+      ...item,
+      id: uuidv4(),
+      confidence: item.confidence || 'medium',
+      pageNumber: pages.length > 1 ? pageNum : undefined,
+    }))
+  )
+
+  const rawNotes = results
+    .map(({ analysis, pageNum }) =>
+      analysis.rawNotes ? `עמוד ${pageNum}: ${analysis.rawNotes}` : ''
+    )
+    .filter(Boolean)
+    .join('\n')
 
   return {
-    drawingType: parsed.drawingType || 'לא זוהה',
-    projectName: parsed.projectName || 'פרויקט',
-    floor: parsed.floor || 'לא זוהה',
-    scale: parsed.scale || 'לא זוהה',
-    items,
-    rawNotes: parsed.rawNotes || '',
+    drawingType: primary.drawingType || 'לא זוהה',
+    projectName: primary.projectName || 'פרויקט',
+    floor: primary.floor || 'לא זוהה',
+    scale: primary.scale || 'לא זוהה',
+    items: allItems,
+    rawNotes,
+    pageCount: pages.length,
   }
 }

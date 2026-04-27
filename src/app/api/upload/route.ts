@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
-import { pdfToJpeg } from '@/lib/pdf-to-image'
+import { pdfToJpegs } from '@/lib/pdf-to-image'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,11 +24,11 @@ export async function POST(req: NextRequest) {
     const pdfBuffer = Buffer.from(await file.arrayBuffer())
     console.log(`[upload] ${file.name} — ${(pdfBuffer.length / 1024 / 1024).toFixed(1)}MB`)
 
-    // Convert PDF → JPEG (pure Node.js, no Python required)
-    let jpegBuffer: Buffer
+    // Convert all PDF pages → JPEG
+    let pageBuffers: Buffer[]
     try {
-      jpegBuffer = await pdfToJpeg(pdfBuffer, 1.5)
-      console.log(`[upload] converted to JPEG: ${(jpegBuffer.length / 1024 / 1024).toFixed(1)}MB`)
+      pageBuffers = await pdfToJpegs(pdfBuffer, 1.5)
+      console.log(`[upload] converted ${pageBuffers.length} pages`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[upload] PDF conversion failed:', err)
@@ -42,35 +42,25 @@ export async function POST(req: NextRequest) {
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       try {
         const { put } = await import('@vercel/blob')
-        const [imageBlob] = await Promise.all([
-          put(`${id}/drawing.jpg`, jpegBuffer, {
-            access: 'public',
-            contentType: 'image/jpeg',
-          }),
-          put(`${id}/drawing.pdf`, pdfBuffer, {
-            access: 'public',
-            contentType: 'application/pdf',
-          }),
+        const pageUploads = pageBuffers.map((buf, i) =>
+          put(`${id}/page-${i + 1}.jpg`, buf, { access: 'public', contentType: 'image/jpeg' })
+        )
+        const [, ...pageBlobs] = await Promise.all([
+          put(`${id}/drawing.pdf`, pdfBuffer, { access: 'public', contentType: 'application/pdf' }),
+          ...pageUploads,
         ])
-        console.log(`[upload] stored in blob: ${imageBlob.url}`)
-        return NextResponse.json({
-          id,
-          fileName: file.name,
-          imageUrl: imageBlob.url,
-        })
+        const imageUrls = pageBlobs.map(b => b.url)
+        console.log(`[upload] stored ${imageUrls.length} pages in blob`)
+        return NextResponse.json({ id, fileName: file.name, imageUrl: imageUrls[0], imageUrls })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error('[upload] Blob storage failed:', err)
-        return NextResponse.json(
-          { error: `שגיאת אחסון: ${msg}` },
-          { status: 500 }
-        )
+        return NextResponse.json({ error: `שגיאת אחסון: ${msg}` }, { status: 500 })
       }
     }
 
     // ── Local filesystem (development) ───────────────────────────────────────
     if (process.env.VERCEL) {
-      // Running on Vercel but no Blob token — tell the user to set it up
       return NextResponse.json(
         { error: 'חסר BLOB_READ_WRITE_TOKEN — הוסף Blob storage ב-Vercel dashboard' },
         { status: 500 }
@@ -81,13 +71,10 @@ export async function POST(req: NextRequest) {
     await mkdir(uploadsDir, { recursive: true })
     await Promise.all([
       writeFile(path.join(uploadsDir, 'drawing.pdf'), pdfBuffer),
-      writeFile(path.join(uploadsDir, 'drawing.jpg'), jpegBuffer),
+      ...pageBuffers.map((buf, i) => writeFile(path.join(uploadsDir, `page-${i + 1}.jpg`), buf)),
     ])
-    return NextResponse.json({
-      id,
-      fileName: file.name,
-      imageUrl: `/api/file/${id}/image`,
-    })
+    const imageUrls = pageBuffers.map((_, i) => `/api/file/${id}/image-${i + 1}`)
+    return NextResponse.json({ id, fileName: file.name, imageUrl: imageUrls[0], imageUrls })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[upload] Unhandled error:', err)

@@ -33,11 +33,12 @@ export default function Home() {
   }, [isAnalyzing])
 
   // ── Add uploaded files to queue ──────────────────────────────────────────
-  const handleFilesUploaded = useCallback((uploaded: { id: string; fileName: string; imageUrl: string }[]) => {
+  const handleFilesUploaded = useCallback((uploaded: { id: string; fileName: string; imageUrl: string; imageUrls?: string[] }[]) => {
     const newFiles: QueuedFile[] = uploaded.map(u => ({
       id: u.id,
       fileName: u.fileName,
       imageUrl: u.imageUrl,
+      imageUrls: u.imageUrls ?? [u.imageUrl],
       status: 'ready' as const,
     }))
     setFiles(prev => {
@@ -49,8 +50,8 @@ export default function Home() {
 
   // ── Analyze a single file ────────────────────────────────────────────────
   const analyzeFile = useCallback(async (id: string) => {
-    // Snapshot imageUrl before setting status (avoids stale closure)
-    const imageUrl = files.find(f => f.id === id)?.imageUrl ?? ''
+    const file = files.find(f => f.id === id)
+    const imageUrls = file?.imageUrls ?? (file?.imageUrl ? [file.imageUrl] : [])
     setFiles(prev => prev.map(f => f.id === id ? { ...f, status: 'analyzing', error: undefined } : f))
     setActiveId(id)
 
@@ -58,7 +59,7 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl, userInstruction: userInstruction.trim() || undefined }),
+        body: JSON.stringify({ imageUrls, userInstruction: userInstruction.trim() || undefined }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'שגיאת ניתוח')

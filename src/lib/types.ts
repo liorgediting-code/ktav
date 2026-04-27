@@ -10,6 +10,7 @@ export interface BOQItem {
   total?: number
   notes?: string
   confidence: 'high' | 'medium' | 'low'
+  pageNumber?: number
 }
 
 export interface DrawingAnalysis {
@@ -19,6 +20,7 @@ export interface DrawingAnalysis {
   scale: string
   items: BOQItem[]
   rawNotes: string
+  pageCount?: number
 }
 
 export interface Project {

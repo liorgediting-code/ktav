@@ -8,6 +8,7 @@ export interface QueuedFile {
   id: string
   fileName: string
   imageUrl: string
+  imageUrls: string[]
   status: FileStatus
   analysis?: DrawingAnalysis
   error?: string

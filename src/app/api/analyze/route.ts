@@ -6,48 +6,66 @@ import { analyzePDF } from '@/lib/analyze'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+async function fetchImageBuffer(url: string): Promise<{ buffer: Buffer; mimeType: 'image/jpeg' | 'image/png' }> {
+  if (url.startsWith('https://') || url.startsWith('http://')) {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`שגיאה בטעינת תמונה: ${res.status}`)
+    const buffer = Buffer.from(await res.arrayBuffer())
+    const ct = res.headers.get('content-type') || ''
+    return { buffer, mimeType: ct.includes('png') ? 'image/png' : 'image/jpeg' }
+  }
+
+  // Local dev: /api/file/<id>/image-N or /api/file/<id>/image
+  const id = url.match(/\/api\/file\/([^/]+)\//)?.[1]
+  if (!id) throw new Error('Invalid imageUrl')
+  const uploadsDir = path.join(process.cwd(), 'uploads', id)
+
+  // Determine file path from URL
+  const pageMatch = url.match(/\/image-(\d+)$/)
+  if (pageMatch) {
+    const filePath = path.join(uploadsDir, `page-${pageMatch[1]}.jpg`)
+    if (!existsSync(filePath)) throw new Error(`עמוד ${pageMatch[1]} לא נמצא`)
+    return { buffer: readFileSync(filePath), mimeType: 'image/jpeg' }
+  }
+
+  // Legacy single-image path
+  const jpgPath = path.join(uploadsDir, 'drawing.jpg')
+  const pngPath = path.join(uploadsDir, 'drawing.png')
+  if (existsSync(jpgPath)) return { buffer: readFileSync(jpgPath), mimeType: 'image/jpeg' }
+  if (existsSync(pngPath)) return { buffer: readFileSync(pngPath), mimeType: 'image/png' }
+  throw new Error('תמונה לא נמצאה')
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { imageUrl, userInstruction } = await req.json()
+    const body = await req.json()
+    const { imageUrl, imageUrls, userInstruction } = body as {
+      imageUrl?: string
+      imageUrls?: string[]
+      userInstruction?: string
+    }
 
-    if (!imageUrl) {
+    // Accept either imageUrls[] (multi-page) or legacy imageUrl (single)
+    const urls: string[] = imageUrls && imageUrls.length > 0
+      ? imageUrls
+      : imageUrl ? [imageUrl] : []
+
+    if (urls.length === 0) {
       return NextResponse.json({ error: 'חסר imageUrl' }, { status: 400 })
     }
 
     if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: 'OPENAI_API_KEY לא מוגדר' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'OPENAI_API_KEY לא מוגדר' }, { status: 500 })
     }
 
-    // Resolve imageUrl → Buffer
-    let imageBuffer: Buffer
-    let mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg'
+    const pages = await Promise.all(
+      urls.map(async (url, i) => {
+        const { buffer, mimeType } = await fetchImageBuffer(url)
+        return { buffer, mimeType, pageNum: i + 1 }
+      })
+    )
 
-    if (imageUrl.startsWith('https://') || imageUrl.startsWith('http://')) {
-      // Vercel Blob (or any external URL)
-      const res = await fetch(imageUrl)
-      if (!res.ok) throw new Error(`שגיאה בטעינת תמונה: ${res.status}`)
-      imageBuffer = Buffer.from(await res.arrayBuffer())
-      const ct = res.headers.get('content-type') || ''
-      if (ct.includes('png')) mimeType = 'image/png'
-    } else {
-      // Local dev: /api/file/<id>/image → uploads/<id>/drawing.jpg (or .png)
-      const id = imageUrl.match(/\/api\/file\/([^/]+)\//)?.[1]
-      if (!id) throw new Error('Invalid imageUrl')
-      const uploadsDir = path.join(process.cwd(), 'uploads', id)
-      const jpgPath = path.join(uploadsDir, 'drawing.jpg')
-      const pngPath = path.join(uploadsDir, 'drawing.png')
-      const filePath = existsSync(jpgPath) ? jpgPath : pngPath
-      if (!existsSync(filePath)) {
-        return NextResponse.json({ error: 'תמונה לא נמצאה' }, { status: 404 })
-      }
-      imageBuffer = readFileSync(filePath)
-      if (filePath.endsWith('.png')) mimeType = 'image/png'
-    }
-
-    const analysis = await analyzePDF(imageBuffer, mimeType, userInstruction)
+    const analysis = await analyzePDF(pages, userInstruction?.trim() || undefined)
     return NextResponse.json({ analysis })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'שגיאה לא ידועה'

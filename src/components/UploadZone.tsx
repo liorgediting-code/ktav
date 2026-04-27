@@ -6,6 +6,7 @@ interface UploadedFile {
   id: string
   fileName: string
   imageUrl: string
+  imageUrls?: string[]
 }
 
 interface Props {
@@ -41,7 +42,7 @@ export default function UploadZone({ onFilesUploaded, compact = false }: Props) 
         const res = await fetch('/api/upload', { method: 'POST', body: form })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-        results.push({ id: data.id, fileName: file.name, imageUrl: data.imageUrl })
+        results.push({ id: data.id, fileName: file.name, imageUrl: data.imageUrl, imageUrls: data.imageUrls })
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'שגיאה לא ידועה'
         errors.push(`${file.name}: ${msg}`)

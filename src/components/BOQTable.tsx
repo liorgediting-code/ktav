@@ -90,16 +90,20 @@ export default function BOQTable({ analysis, fileName, onUpdate }: Props) {
   const sections = [...new Set(analysis.items.map(i => i.section))]
   const highCount = analysis.items.filter(i => i.confidence === 'high').length
   const totalQty = analysis.items.reduce((sum, i) => sum + i.quantity, 0)
+  const hasPages = (analysis.pageCount ?? 0) > 1
+
+  const statsCards = [
+    { label: 'פריטים זוהו', value: analysis.items.length, sub: `${sections.length} ענפים`, color: 'text-slate-800', bg: 'bg-white' },
+    ...(hasPages ? [{ label: 'עמודים נותחו', value: analysis.pageCount!, sub: 'כל עמוד בנפרד', color: 'text-sky-600', bg: 'bg-sky-50' }] : []),
+    { label: 'ביטחון גבוה', value: `${analysis.items.length > 0 ? Math.round(highCount / analysis.items.length * 100) : 0}%`, sub: `${highCount} מתוך ${analysis.items.length}`, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'כמות כוללת', value: totalQty.toLocaleString('he-IL', { maximumFractionDigits: 1 }), sub: 'יחידות שונות', color: 'text-orange-600', bg: 'bg-orange-50' },
+  ]
 
   return (
     <div className="flex flex-col gap-5" dir="rtl">
       {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-4 animate-float-up">
-        {[
-          { label: 'פריטים זוהו', value: analysis.items.length, sub: `${sections.length} ענפים`, color: 'text-slate-800', bg: 'bg-white' },
-          { label: 'ביטחון גבוה', value: `${analysis.items.length > 0 ? Math.round(highCount / analysis.items.length * 100) : 0}%`, sub: `${highCount} מתוך ${analysis.items.length}`, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'כמות כוללת', value: totalQty.toLocaleString('he-IL', { maximumFractionDigits: 1 }), sub: 'יחידות שונות', color: 'text-orange-600', bg: 'bg-orange-50' },
-        ].map(card => (
+      <div className={`grid gap-4 animate-float-up ${statsCards.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        {statsCards.map(card => (
           <div key={card.label} className={`${card.bg} rounded-2xl border border-slate-200 p-4`}>
             <p className="text-xs text-slate-500 mb-1">{card.label}</p>
             <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
@@ -189,9 +193,14 @@ export default function BOQTable({ analysis, fileName, onUpdate }: Props) {
                 key={item.id}
                 className={`grid grid-cols-12 gap-0 px-5 py-3.5 text-sm border-b border-slate-50 last:border-0 hover:bg-slate-50/80 transition-colors duration-100 ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}
               >
-                {/* Code */}
-                <div className="col-span-1 text-center font-mono text-xs text-slate-300 flex items-center justify-center">
-                  {item.itemCode}
+                {/* Code + optional page badge */}
+                <div className="col-span-1 flex flex-col items-center justify-center gap-0.5">
+                  <span className="font-mono text-xs text-slate-300">{item.itemCode}</span>
+                  {item.pageNumber != null && (
+                    <span className="text-[10px] font-semibold text-sky-500 bg-sky-50 border border-sky-200 px-1.5 py-0 rounded-full leading-4">
+                      עמ׳ {item.pageNumber}
+                    </span>
+                  )}
                 </div>
 
                 {/* Description */}
@@ -254,7 +263,7 @@ export default function BOQTable({ analysis, fileName, onUpdate }: Props) {
       })}
 
       {/* Legend */}
-      <div className="flex items-center justify-center gap-5 py-2 text-xs text-slate-400">
+      <div className="flex items-center justify-center gap-5 py-2 text-xs text-slate-400 flex-wrap">
         {Object.entries(CONF).map(([k, v]) => (
           <span key={k} className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${v.dot}`} />
@@ -262,6 +271,15 @@ export default function BOQTable({ analysis, fileName, onUpdate }: Props) {
           </span>
         ))}
         <span className="border-r border-slate-200 h-3 mx-1" />
+        {hasPages && (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold text-sky-500 bg-sky-50 border border-sky-200 px-1.5 rounded-full">עמ׳</span>
+              מספר עמוד המקור
+            </span>
+            <span className="border-r border-slate-200 h-3 mx-1" />
+          </>
+        )}
         <span className="flex items-center gap-1">
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
