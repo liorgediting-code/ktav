@@ -18,13 +18,14 @@ const CONF = {
 const NO_FLOOR = '__no_floor__'
 
 function computeSubtotals(items: BOQItem[]) {
-  const map = new Map<string, { section: string; unit: string; quantity: number }>()
+  // Group by sectionCode+unit so variant names for the same section (e.g. "ברזל" vs "ברזל ובטון") don't produce duplicate rows
+  const map = new Map<string, { sectionCode: string; section: string; unit: string; quantity: number }>()
   for (const item of items) {
-    const key = `${item.section}||${item.unit}`
-    if (!map.has(key)) map.set(key, { section: item.section, unit: item.unit, quantity: 0 })
+    const key = `${item.sectionCode}||${item.unit}`
+    if (!map.has(key)) map.set(key, { sectionCode: item.sectionCode, section: item.section, unit: item.unit, quantity: 0 })
     map.get(key)!.quantity += item.quantity
   }
-  return [...map.values()]
+  return [...map.values()].sort((a, b) => a.sectionCode.localeCompare(b.sectionCode))
 }
 
 function EditableCell({
@@ -73,7 +74,8 @@ function SubtotalBar({ items, label }: { items: BOQItem[]; label: string }) {
     <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-5 py-3 bg-slate-800 border-t border-slate-700">
       <span className="text-xs font-bold text-slate-300 shrink-0">{label}</span>
       {totals.map(t => (
-        <span key={`${t.section}||${t.unit}`} className="flex items-center gap-1.5 text-xs">
+        <span key={`${t.sectionCode}||${t.unit}`} className="flex items-center gap-1.5 text-xs">
+          <span className="text-slate-500 font-mono">{t.sectionCode}</span>
           <span className="text-slate-400">{t.section}</span>
           <span className="font-bold text-white">{t.quantity.toLocaleString('he-IL', { maximumFractionDigits: 2 })}</span>
           <span className="text-slate-400">{t.unit}</span>
@@ -352,7 +354,8 @@ export default function BOQTable({ analysis, fileName, onUpdate }: Props) {
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 px-5 py-4">
             {computeSubtotals(analysis.items).map(t => (
-              <div key={`${t.section}||${t.unit}`} className="flex items-baseline gap-2">
+              <div key={`${t.sectionCode}||${t.unit}`} className="flex items-baseline gap-2">
+                <span className="text-slate-500 text-xs font-mono">{t.sectionCode}</span>
                 <span className="text-slate-400 text-xs">{t.section}</span>
                 <span className="text-white font-bold text-lg leading-none">
                   {t.quantity.toLocaleString('he-IL', { maximumFractionDigits: 2 })}
